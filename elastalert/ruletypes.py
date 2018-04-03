@@ -818,7 +818,7 @@ class NewTermsRule(RuleType):
 
     def is_five(self):
         version = self.es.info()['version']['number']
-        return version.startswith('5')
+        return version.startswith('6')
 
 
 class CardinalityRule(RuleType):
@@ -1089,3 +1089,36 @@ class PercentageMatchRule(BaseAggregationRule):
         if 'min_percentage' in self.rules and match_percentage < self.rules['min_percentage']:
             return True
         return False
+
+
+class NoValuesThreshold(RuleType):
+    required_options = frozenset(['compare_key'])
+
+    def __init__(self, *args):
+        super(NoValuesThreshold, self).__init__(*args)
+        self.ts_field = self.rules.get('timestamp_field', '@timestamp')
+
+        self.events = []
+
+    def add_data(self, data):
+        for event in data:
+            self.events.append(event)
+
+    # The results of get_match_str will appear in the alert text
+    def get_match_str(self, match):
+        return "Have records less then {0} at {1}".format(self.rules['threshold'], match['time'])
+
+    # garbage_collect is called indicating that ElastAlert has already been run up to timestamp
+    # It is useful for knowing that there were no query results from Elasticsearch because
+    # add_data will not be called with an empty list
+    def garbage_collect(self, timestamp):
+        events = [e for e in self.events
+                  if lookup_es_key(e, self.rules['timestamp_field']) > timestamp - self.rules['timeframe']]
+        values = sum([lookup_es_key(event, self.rules['compare_key']) for event in events])
+        if len(events) <= self.rules['threshold'] or values <= self.rules['threshold']:
+            self.matches.append({
+                '_id': u'',
+                'time': timestamp,
+                'value': 0
+            })
+        self.events = []

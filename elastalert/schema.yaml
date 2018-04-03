@@ -129,6 +129,11 @@ oneOf:
       # custom rules include a period in the rule type
       type: {pattern: "[.]"}
 
+  - title: NoValuesTreshold
+    required: [compare_key]
+    properties:
+      type: {enum: [novalues_match]}
+
 properties:
 
   # Common Settings
